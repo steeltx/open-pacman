@@ -12,6 +12,20 @@ const OPPOSITE = { left: 'right', right: 'left', up: 'down', down: 'up' };
 
 const PACMAN_SPEED = 0.125; // 1/8 celda/frame -> alinea cada 8 frames
 const GHOST_SPEED = 0.1;    // 1/10 celda/frame
+const GHOST_RELEASE_INTERVAL = 120;
+const GHOST_EXIT = { x: 13, y: 11 };
+
+function initialGhostState( kind ) {
+  const index = GHOST_STARTS.findIndex( ( start ) => start.kind === kind );
+  const start = GHOST_STARTS[ index ];
+  return {
+    x: start.x,
+    y: start.y,
+    dir: 'up',
+    releaseFramesRemaining: index * GHOST_RELEASE_INTERVAL,
+    exiting: true,
+  };
+}
 
 // Crea una partida nueva. Copia MAZE (pristino) a game.grid para poder comer
 // dots sin destruir el original, y reiniciar.
@@ -37,9 +51,7 @@ function createGame() {
       speed: PACMAN_SPEED,
     },
     ghosts: GHOST_STARTS.map( ( g ) => ( {
-      x: g.x,
-      y: g.y,
-      dir: 'up',
+      ...initialGhostState( g.kind ),
       speed: GHOST_SPEED,
       kind: g.kind,
     } ) ),
@@ -110,45 +122,125 @@ function movePacman( game ) {
   wrapTunnel( p, width );
 }
 
+function ghostNeighbor( grid, x, y, dir ) {
+  const delta = DIRS[ dir ];
+  const neighbor = { x: x + delta.x, y: y + delta.y };
+  wrapTunnel( neighbor, grid[ 0 ].length );
+  return neighbor;
+}
+
+function shortestGhostDirection( grid, ghost, target, choices ) {
+  const visited = new Set( [ `${ghost.x},${ghost.y}` ] );
+  const queue = [];
+  for ( const dir of choices ) {
+    const neighbor = ghostNeighbor( grid, ghost.x, ghost.y, dir );
+    const key = `${neighbor.x},${neighbor.y}`;
+    if ( visited.has( key ) ) continue;
+    visited.add( key );
+    queue.push( { ...neighbor, dir } );
+  }
+
+  for ( let index = 0; index < queue.length; index++ ) {
+    const cell = queue[ index ];
+    if ( cell.x === target.x && cell.y === target.y ) return cell.dir;
+    for ( const dir of Object.keys( DIRS ) ) {
+      if ( !canMove( grid, cell.x, cell.y, dir, 'ghost' ) ) continue;
+      const neighbor = ghostNeighbor( grid, cell.x, cell.y, dir );
+      const key = `${neighbor.x},${neighbor.y}`;
+      if ( visited.has( key ) ) continue;
+      visited.add( key );
+      queue.push( { ...neighbor, dir: cell.dir } );
+    }
+  }
+  return null;
+}
+
+function pacmanAhead( pacman, distance ) {
+  const delta = DIRS[ pacman.dir ];
+  return {
+    x: Math.round( pacman.x ) + delta.x * distance,
+    y: Math.round( pacman.y ) + delta.y * distance,
+  };
+}
+
+function ghostTarget( game, ghost ) {
+  if ( ghost.kind === 'pinky' ) return pacmanAhead( game.pacman, 4 );
+  if ( ghost.kind === 'inky' ) {
+    const ahead = pacmanAhead( game.pacman, 2 );
+    const blinky = game.ghosts.find( ( actor ) => actor.kind === 'blinky' );
+    return {
+      x: ahead.x + ( ahead.x - Math.round( blinky.x ) ),
+      y: ahead.y + ( ahead.y - Math.round( blinky.y ) ),
+    };
+  }
+  if ( ghost.kind === 'clyde' ) {
+    const pacman = pacmanAhead( game.pacman, 0 );
+    const distanceSquared = ( ghost.x - pacman.x ) ** 2 + ( ghost.y - pacman.y ) ** 2;
+    if ( distanceSquared < 64 ) return { x: 0, y: game.grid.length - 1 };
+    return pacman;
+  }
+  return pacmanAhead( game.pacman, 0 );
+}
+
+function closestGhostDirection( grid, ghost, target, choices ) {
+  let best = choices[ 0 ];
+  let bestDistance = Infinity;
+  for ( const dir of choices ) {
+    const neighbor = ghostNeighbor( grid, ghost.x, ghost.y, dir );
+    const distance = ( neighbor.x - target.x ) ** 2 + ( neighbor.y - target.y ) ** 2;
+    if ( distance < bestDistance ) {
+      bestDistance = distance;
+      best = dir;
+    }
+  }
+  return best;
+}
+
 function decideGhost( game, g ) {
   const grid = game.grid;
-  const p = game.pacman;
 
-  const options = Object.keys( DIRS ).filter(
-    ( dir ) => dir !== OPPOSITE[ g.dir ] && canMove( grid, g.x, g.y, dir, 'ghost' )
+  // El orden left, right, up, down resuelve empates de forma reproducible.
+  const legal = Object.keys( DIRS ).filter(
+    ( dir ) => canMove( grid, g.x, g.y, dir, 'ghost' )
   );
+  const options = legal.filter( ( dir ) => dir !== OPPOSITE[ g.dir ] );
   // Sin salida (callejon): permitir el giro de 180.
-  const choices = options.length ? options : [ '' + OPPOSITE[ g.dir ] ];
+  const choices = options.length ? options : legal;
+  if ( !choices.length ) return;
 
-  if ( g.kind === 'hunter' ) {
-    const px = Math.round( p.x );
-    const py = Math.round( p.y );
-    let best = choices[ 0 ];
-    let bestDist = Infinity;
-    for ( const dir of choices ) {
-      const d = DIRS[ dir ];
-      const nx = g.x + d.x;
-      const ny = g.y + d.y;
-      const dist = Math.abs( nx - px ) + Math.abs( ny - py );
-      if ( dist < bestDist ) {
-        bestDist = dist;
-        best = dir;
-      }
-    }
-    g.dir = best;
+  if ( g.kind === 'blinky' ) {
+    const target = ghostTarget( game, g );
+    g.dir = shortestGhostDirection( grid, g, target, choices )
+      || closestGhostDirection( grid, g, target, choices );
   } else {
-    g.dir = choices[ Math.floor( Math.random() * choices.length ) ];
+    g.dir = closestGhostDirection( grid, g, ghostTarget( game, g ), choices );
+  }
+}
+
+function decideGhostExit( g ) {
+  if ( g.x !== GHOST_EXIT.x ) {
+    g.dir = g.x < GHOST_EXIT.x ? 'right' : 'left';
+  } else if ( g.y > GHOST_EXIT.y ) {
+    g.dir = 'up';
+  } else {
+    g.exiting = false;
   }
 }
 
 function moveGhost( game, g ) {
+  if ( g.releaseFramesRemaining > 0 ) {
+    g.releaseFramesRemaining--;
+    return;
+  }
+
   const grid = game.grid;
   const width = grid[ 0 ].length;
 
   if ( aligned( g.x ) && aligned( g.y ) ) {
     g.x = Math.round( g.x );
     g.y = Math.round( g.y );
-    decideGhost( game, g );
+    if ( g.exiting ) decideGhostExit( g );
+    if ( !g.exiting ) decideGhost( game, g );
     if ( !canMove( grid, g.x, g.y, g.dir, 'ghost' ) ) return;
   }
 
@@ -164,10 +256,8 @@ function resetPositions( game ) {
   p.y = PACMAN_START.y;
   p.dir = 'left';
   p.nextDir = null;
-  game.ghosts.forEach( ( g, i ) => {
-    g.x = GHOST_STARTS[ i ].x;
-    g.y = GHOST_STARTS[ i ].y;
-    g.dir = 'up';
+  game.ghosts.forEach( ( g ) => {
+    Object.assign( g, initialGhostState( g.kind ) );
   } );
 }
 
