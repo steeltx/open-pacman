@@ -14,6 +14,7 @@ const PACMAN_SPEED = 0.125; // 1/8 celda/frame -> alinea cada 8 frames
 const GHOST_SPEED = 0.1;    // 1/10 celda/frame
 const GHOST_RELEASE_INTERVAL = 120;
 const GHOST_EXIT = { x: 13, y: 11 };
+const POWER_DURATION = 360;
 
 function initialGhostState( kind ) {
   const index = GHOST_STARTS.findIndex( ( start ) => start.kind === kind );
@@ -24,6 +25,7 @@ function initialGhostState( kind ) {
     dir: 'up',
     releaseFramesRemaining: index * GHOST_RELEASE_INTERVAL,
     exiting: true,
+    returning: false,
   };
 }
 
@@ -41,6 +43,8 @@ function createGame() {
     state: 'start',
     score: 0,
     lives: 3,
+    powerFramesRemaining: 0,
+    ghostsEatenDuringPower: 0,
     dotsRemaining: dots,
     grid,
     pacman: {
@@ -111,6 +115,10 @@ function movePacman( game ) {
       grid[ p.y ][ p.x ] = 0;
       game.score += tile === 4 ? 50 : 10;
       game.dotsRemaining--;
+      if ( tile === 4 ) {
+        game.powerFramesRemaining = POWER_DURATION;
+        game.ghostsEatenDuringPower = 0;
+      }
     }
     // Si no puede seguir, se detiene en la celda.
     if ( !canMove( grid, p.x, p.y, p.dir, 'pacman' ) ) return;
@@ -251,6 +259,8 @@ function moveGhost( game, g ) {
 }
 
 function resetPositions( game ) {
+  game.powerFramesRemaining = 0;
+  game.ghostsEatenDuringPower = 0;
   const p = game.pacman;
   p.x = PACMAN_START.x;
   p.y = PACMAN_START.y;
@@ -270,9 +280,18 @@ function update( game ) {
   game.ghosts.forEach( ( g ) => moveGhost( game, g ) );
 
   for ( const g of game.ghosts ) {
+    if ( g.returning ) continue;
     if ( collides( game.pacman, g ) ) {
+      if ( game.powerFramesRemaining > 0 ) {
+        game.score += 200 * 2 ** Math.min( game.ghostsEatenDuringPower, 3 );
+        game.ghostsEatenDuringPower++;
+        g.returning = true;
+        continue;
+      }
       game.lives--;
       if ( game.lives <= 0 ) {
+        game.powerFramesRemaining = 0;
+        game.ghostsEatenDuringPower = 0;
         game.state = 'lost';
         return;
       }
@@ -281,6 +300,7 @@ function update( game ) {
     }
   }
 
+  if ( game.powerFramesRemaining > 0 ) game.powerFramesRemaining--;
   if ( game.dotsRemaining <= 0 ) game.state = 'won';
 }
 

@@ -101,6 +101,11 @@ function drawPacman( ctx, p, frame ) {
 }
 
 function drawGhost( ctx, g, color ) {
+  if ( !g.returning ) drawGhostBody( ctx, g, color );
+  drawGhostEyes( ctx, g );
+}
+
+function drawGhostBody( ctx, g, color ) {
   const { cx, cy } = cellCenter( g.x, g.y );
   const r = TILE / 2 - 1;
   const top = cy - r;
@@ -119,7 +124,10 @@ function drawGhost( ctx, g, color ) {
   ctx.lineTo( left, bottom );
   ctx.closePath();
   ctx.fill();
+}
 
+function drawGhostEyes( ctx, g ) {
+  const { cx, cy } = cellCenter( g.x, g.y );
   // ojos mirando segun direccion
   const dir = DIRS[ g.dir ] || { x: 0, y: 0 };
   const ex = dir.x * 1.6;
