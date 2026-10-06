@@ -12,6 +12,20 @@ const OPPOSITE = { left: 'right', right: 'left', up: 'down', down: 'up' };
 
 const PACMAN_SPEED = 0.125; // 1/8 celda/frame -> alinea cada 8 frames
 const GHOST_SPEED = 0.1;    // 1/10 celda/frame
+const GHOST_RELEASE_INTERVAL = 120;
+const GHOST_EXIT = { x: 13, y: 11 };
+
+function initialGhostState( kind ) {
+  const index = GHOST_STARTS.findIndex( ( start ) => start.kind === kind );
+  const start = GHOST_STARTS[ index ];
+  return {
+    x: start.x,
+    y: start.y,
+    dir: 'up',
+    releaseFramesRemaining: index * GHOST_RELEASE_INTERVAL,
+    exiting: true,
+  };
+}
 
 // Crea una partida nueva. Copia MAZE (pristino) a game.grid para poder comer
 // dots sin destruir el original, y reiniciar.
@@ -37,9 +51,7 @@ function createGame() {
       speed: PACMAN_SPEED,
     },
     ghosts: GHOST_STARTS.map( ( g ) => ( {
-      x: g.x,
-      y: g.y,
-      dir: 'up',
+      ...initialGhostState( g.kind ),
       speed: GHOST_SPEED,
       kind: g.kind,
     } ) ),
@@ -141,14 +153,30 @@ function decideGhost( game, g ) {
   }
 }
 
+function decideGhostExit( g ) {
+  if ( g.x !== GHOST_EXIT.x ) {
+    g.dir = g.x < GHOST_EXIT.x ? 'right' : 'left';
+  } else if ( g.y > GHOST_EXIT.y ) {
+    g.dir = 'up';
+  } else {
+    g.exiting = false;
+  }
+}
+
 function moveGhost( game, g ) {
+  if ( g.releaseFramesRemaining > 0 ) {
+    g.releaseFramesRemaining--;
+    return;
+  }
+
   const grid = game.grid;
   const width = grid[ 0 ].length;
 
   if ( aligned( g.x ) && aligned( g.y ) ) {
     g.x = Math.round( g.x );
     g.y = Math.round( g.y );
-    decideGhost( game, g );
+    if ( g.exiting ) decideGhostExit( g );
+    if ( !g.exiting ) decideGhost( game, g );
     if ( !canMove( grid, g.x, g.y, g.dir, 'ghost' ) ) return;
   }
 
@@ -164,10 +192,8 @@ function resetPositions( game ) {
   p.y = PACMAN_START.y;
   p.dir = 'left';
   p.nextDir = null;
-  game.ghosts.forEach( ( g, i ) => {
-    g.x = GHOST_STARTS[ i ].x;
-    g.y = GHOST_STARTS[ i ].y;
-    g.dir = 'up';
+  game.ghosts.forEach( ( g ) => {
+    Object.assign( g, initialGhostState( g.kind ) );
   } );
 }
 
