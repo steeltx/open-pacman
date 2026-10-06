@@ -66,14 +66,16 @@ function drawDoor( ctx, grid ) {
   ctx.stroke();
 }
 
-function drawDots( ctx, grid ) {
+function drawDots( ctx, grid, frame ) {
   ctx.fillStyle = DOT_COLOR;
   for ( let y = 0; y < grid.length; y++ ) {
     for ( let x = 0; x < grid[ 0 ].length; x++ ) {
-      if ( grid[ y ][ x ] !== 2 ) continue;
+      const tile = grid[ y ][ x ];
+      if ( tile !== 2 && tile !== 4 ) continue;
+      if ( tile === 4 && frame % 60 >= 30 ) continue;
       const { cx, cy } = cellCenter( x, y );
       ctx.beginPath();
-      ctx.arc( cx, cy, 2.5, 0, Math.PI * 2 );
+      ctx.arc( cx, cy, tile === 4 ? 6 : 2.5, 0, Math.PI * 2 );
       ctx.fill();
     }
   }
@@ -99,6 +101,11 @@ function drawPacman( ctx, p, frame ) {
 }
 
 function drawGhost( ctx, g, color ) {
+  if ( !g.returning ) drawGhostBody( ctx, g, color );
+  drawGhostEyes( ctx, g );
+}
+
+function drawGhostBody( ctx, g, color ) {
   const { cx, cy } = cellCenter( g.x, g.y );
   const r = TILE / 2 - 1;
   const top = cy - r;
@@ -117,7 +124,10 @@ function drawGhost( ctx, g, color ) {
   ctx.lineTo( left, bottom );
   ctx.closePath();
   ctx.fill();
+}
 
+function drawGhostEyes( ctx, g ) {
+  const { cx, cy } = cellCenter( g.x, g.y );
   // ojos mirando segun direccion
   const dir = DIRS[ g.dir ] || { x: 0, y: 0 };
   const ex = dir.x * 1.6;
@@ -151,6 +161,15 @@ const GHOST_COLORS = {
   clyde: '#ffb852',
 };
 
+function ghostColor( game, ghost ) {
+  if ( game.powerFramesRemaining > 0 && !ghost.returning ) {
+    const warning = game.powerFramesRemaining <= 120;
+    const white = Math.floor( game.powerFramesRemaining / 15 ) % 2 === 0;
+    return warning && white ? '#fff' : '#2121ff';
+  }
+  return GHOST_COLORS[ ghost.kind ] || '#ff0000';
+}
+
 function draw( ctx, game, frame ) {
   const grid = game.grid;
   const W = grid[ 0 ].length;
@@ -161,9 +180,9 @@ function draw( ctx, game, frame ) {
 
   drawWalls( ctx, grid );
   drawDoor( ctx, grid );
-  drawDots( ctx, grid );
+  drawDots( ctx, grid, frame );
   drawPacman( ctx, game.pacman, frame );
-  game.ghosts.forEach( ( g ) => drawGhost( ctx, g, GHOST_COLORS[ g.kind ] || '#ff0000' ) );
+  game.ghosts.forEach( ( g ) => drawGhost( ctx, g, ghostColor( game, g ) ) );
   drawHUD( ctx, game, W );
 }
 

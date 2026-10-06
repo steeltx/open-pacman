@@ -14,6 +14,7 @@ const PACMAN_SPEED = 0.125; // 1/8 celda/frame -> alinea cada 8 frames
 const GHOST_SPEED = 0.1;    // 1/10 celda/frame
 const GHOST_RELEASE_INTERVAL = 120;
 const GHOST_EXIT = { x: 13, y: 11 };
+const POWER_DURATION = 360;
 
 function initialGhostState( kind ) {
   const index = GHOST_STARTS.findIndex( ( start ) => start.kind === kind );
@@ -24,6 +25,7 @@ function initialGhostState( kind ) {
     dir: 'up',
     releaseFramesRemaining: index * GHOST_RELEASE_INTERVAL,
     exiting: true,
+    returning: false,
   };
 }
 
@@ -35,12 +37,14 @@ function createGame() {
   grid[ PACMAN_START.y ][ PACMAN_START.x ] = 0;
 
   let dots = 0;
-  for ( const row of grid ) for ( const v of row ) if ( v === 2 ) dots++;
+  for ( const row of grid ) for ( const v of row ) if ( v === 2 || v === 4 ) dots++;
 
   return {
     state: 'start',
     score: 0,
     lives: 3,
+    powerFramesRemaining: 0,
+    ghostsEatenDuringPower: 0,
     dotsRemaining: dots,
     grid,
     pacman: {
@@ -106,11 +110,15 @@ function movePacman( game ) {
       p.dir = p.nextDir;
       p.nextDir = null;
     }
-    // Comer dot.
-    if ( grid[ p.y ][ p.x ] === 2 ) {
+    const tile = grid[ p.y ][ p.x ];
+    if ( tile === 2 || tile === 4 ) {
       grid[ p.y ][ p.x ] = 0;
-      game.score += 10;
+      game.score += tile === 4 ? 50 : 10;
       game.dotsRemaining--;
+      if ( tile === 4 ) {
+        game.powerFramesRemaining = POWER_DURATION;
+        game.ghostsEatenDuringPower = 0;
+      }
     }
     // Si no puede seguir, se detiene en la celda.
     if ( !canMove( grid, p.x, p.y, p.dir, 'pacman' ) ) return;
@@ -196,6 +204,20 @@ function closestGhostDirection( grid, ghost, target, choices ) {
   return best;
 }
 
+function farthestGhostDirection( grid, ghost, target, choices ) {
+  let best = choices[ 0 ];
+  let bestDistance = -Infinity;
+  for ( const dir of choices ) {
+    const neighbor = ghostNeighbor( grid, ghost.x, ghost.y, dir );
+    const distance = ( neighbor.x - target.x ) ** 2 + ( neighbor.y - target.y ) ** 2;
+    if ( distance > bestDistance ) {
+      bestDistance = distance;
+      best = dir;
+    }
+  }
+  return best;
+}
+
 function decideGhost( game, g ) {
   const grid = game.grid;
 
@@ -208,7 +230,9 @@ function decideGhost( game, g ) {
   const choices = options.length ? options : legal;
   if ( !choices.length ) return;
 
-  if ( g.kind === 'blinky' ) {
+  if ( game.powerFramesRemaining > 0 ) {
+    g.dir = farthestGhostDirection( grid, g, pacmanAhead( game.pacman, 0 ), choices );
+  } else if ( g.kind === 'blinky' ) {
     const target = ghostTarget( game, g );
     g.dir = shortestGhostDirection( grid, g, target, choices )
       || closestGhostDirection( grid, g, target, choices );
@@ -227,8 +251,23 @@ function decideGhostExit( g ) {
   }
 }
 
+function decideGhostReturn( game, g ) {
+  const start = GHOST_STARTS.find( ( actor ) => actor.kind === g.kind );
+  if ( g.x === start.x && g.y === start.y ) {
+    g.returning = false;
+    g.releaseFramesRemaining = 0;
+    g.exiting = true;
+    return;
+  }
+
+  const choices = Object.keys( DIRS ).filter(
+    ( dir ) => canMove( game.grid, g.x, g.y, dir, 'ghost' )
+  );
+  g.dir = shortestGhostDirection( game.grid, g, start, choices ) || g.dir;
+}
+
 function moveGhost( game, g ) {
-  if ( g.releaseFramesRemaining > 0 ) {
+  if ( !g.returning && g.releaseFramesRemaining > 0 ) {
     g.releaseFramesRemaining--;
     return;
   }
@@ -239,8 +278,11 @@ function moveGhost( game, g ) {
   if ( aligned( g.x ) && aligned( g.y ) ) {
     g.x = Math.round( g.x );
     g.y = Math.round( g.y );
-    if ( g.exiting ) decideGhostExit( g );
-    if ( !g.exiting ) decideGhost( game, g );
+    if ( g.returning ) decideGhostReturn( game, g );
+    if ( !g.returning ) {
+      if ( g.exiting ) decideGhostExit( g );
+      if ( !g.exiting ) decideGhost( game, g );
+    }
     if ( !canMove( grid, g.x, g.y, g.dir, 'ghost' ) ) return;
   }
 
@@ -251,6 +293,8 @@ function moveGhost( game, g ) {
 }
 
 function resetPositions( game ) {
+  game.powerFramesRemaining = 0;
+  game.ghostsEatenDuringPower = 0;
   const p = game.pacman;
   p.x = PACMAN_START.x;
   p.y = PACMAN_START.y;
@@ -270,9 +314,18 @@ function update( game ) {
   game.ghosts.forEach( ( g ) => moveGhost( game, g ) );
 
   for ( const g of game.ghosts ) {
+    if ( g.returning ) continue;
     if ( collides( game.pacman, g ) ) {
+      if ( game.powerFramesRemaining > 0 ) {
+        game.score += 200 * 2 ** Math.min( game.ghostsEatenDuringPower, 3 );
+        game.ghostsEatenDuringPower++;
+        g.returning = true;
+        continue;
+      }
       game.lives--;
       if ( game.lives <= 0 ) {
+        game.powerFramesRemaining = 0;
+        game.ghostsEatenDuringPower = 0;
         game.state = 'lost';
         return;
       }
@@ -281,6 +334,7 @@ function update( game ) {
     }
   }
 
+  if ( game.powerFramesRemaining > 0 ) game.powerFramesRemaining--;
   if ( game.dotsRemaining <= 0 ) game.state = 'won';
 }
 
