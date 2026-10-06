@@ -155,9 +155,35 @@ function shortestGhostDirection( grid, ghost, target, choices ) {
   return null;
 }
 
+function pacmanAhead( pacman, distance ) {
+  const delta = DIRS[ pacman.dir ];
+  return {
+    x: Math.round( pacman.x ) + delta.x * distance,
+    y: Math.round( pacman.y ) + delta.y * distance,
+  };
+}
+
+function ghostTarget( game, ghost ) {
+  if ( ghost.kind === 'pinky' ) return pacmanAhead( game.pacman, 4 );
+  return pacmanAhead( game.pacman, 0 );
+}
+
+function closestGhostDirection( grid, ghost, target, choices ) {
+  let best = choices[ 0 ];
+  let bestDistance = Infinity;
+  for ( const dir of choices ) {
+    const neighbor = ghostNeighbor( grid, ghost.x, ghost.y, dir );
+    const distance = ( neighbor.x - target.x ) ** 2 + ( neighbor.y - target.y ) ** 2;
+    if ( distance < bestDistance ) {
+      bestDistance = distance;
+      best = dir;
+    }
+  }
+  return best;
+}
+
 function decideGhost( game, g ) {
   const grid = game.grid;
-  const p = game.pacman;
 
   // El orden left, right, up, down resuelve empates de forma reproducible.
   const legal = Object.keys( DIRS ).filter(
@@ -169,24 +195,11 @@ function decideGhost( game, g ) {
   if ( !choices.length ) return;
 
   if ( g.kind === 'blinky' ) {
-    const px = Math.round( p.x );
-    const py = Math.round( p.y );
-    const shortest = shortestGhostDirection( grid, g, { x: px, y: py }, choices );
-    if ( shortest ) {
-      g.dir = shortest;
-      return;
-    }
-    let best = choices[ 0 ];
-    let bestDist = Infinity;
-    for ( const dir of choices ) {
-      const neighbor = ghostNeighbor( grid, g.x, g.y, dir );
-      const dist = ( neighbor.x - px ) ** 2 + ( neighbor.y - py ) ** 2;
-      if ( dist < bestDist ) {
-        bestDist = dist;
-        best = dir;
-      }
-    }
-    g.dir = best;
+    const target = ghostTarget( game, g );
+    g.dir = shortestGhostDirection( grid, g, target, choices )
+      || closestGhostDirection( grid, g, target, choices );
+  } else if ( g.kind === 'pinky' ) {
+    g.dir = closestGhostDirection( grid, g, ghostTarget( game, g ), choices );
   } else {
     g.dir = choices[ Math.floor( Math.random() * choices.length ) ];
   }
