@@ -235,8 +235,23 @@ function decideGhostExit( g ) {
   }
 }
 
+function decideGhostReturn( game, g ) {
+  const start = GHOST_STARTS.find( ( actor ) => actor.kind === g.kind );
+  if ( g.x === start.x && g.y === start.y ) {
+    g.returning = false;
+    g.releaseFramesRemaining = 0;
+    g.exiting = true;
+    return;
+  }
+
+  const choices = Object.keys( DIRS ).filter(
+    ( dir ) => canMove( game.grid, g.x, g.y, dir, 'ghost' )
+  );
+  g.dir = shortestGhostDirection( game.grid, g, start, choices ) || g.dir;
+}
+
 function moveGhost( game, g ) {
-  if ( g.releaseFramesRemaining > 0 ) {
+  if ( !g.returning && g.releaseFramesRemaining > 0 ) {
     g.releaseFramesRemaining--;
     return;
   }
@@ -247,8 +262,11 @@ function moveGhost( game, g ) {
   if ( aligned( g.x ) && aligned( g.y ) ) {
     g.x = Math.round( g.x );
     g.y = Math.round( g.y );
-    if ( g.exiting ) decideGhostExit( g );
-    if ( !g.exiting ) decideGhost( game, g );
+    if ( g.returning ) decideGhostReturn( game, g );
+    if ( !g.returning ) {
+      if ( g.exiting ) decideGhostExit( g );
+      if ( !g.exiting ) decideGhost( game, g );
+    }
     if ( !canMove( grid, g.x, g.y, g.dir, 'ghost' ) ) return;
   }
 
