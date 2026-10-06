@@ -165,6 +165,14 @@ function pacmanAhead( pacman, distance ) {
 
 function ghostTarget( game, ghost ) {
   if ( ghost.kind === 'pinky' ) return pacmanAhead( game.pacman, 4 );
+  if ( ghost.kind === 'inky' ) {
+    const ahead = pacmanAhead( game.pacman, 2 );
+    const blinky = game.ghosts.find( ( actor ) => actor.kind === 'blinky' );
+    return {
+      x: ahead.x + ( ahead.x - Math.round( blinky.x ) ),
+      y: ahead.y + ( ahead.y - Math.round( blinky.y ) ),
+    };
+  }
   return pacmanAhead( game.pacman, 0 );
 }
 
@@ -198,7 +206,7 @@ function decideGhost( game, g ) {
     const target = ghostTarget( game, g );
     g.dir = shortestGhostDirection( grid, g, target, choices )
       || closestGhostDirection( grid, g, target, choices );
-  } else if ( g.kind === 'pinky' ) {
+  } else if ( g.kind === 'pinky' || g.kind === 'inky' ) {
     g.dir = closestGhostDirection( grid, g, ghostTarget( game, g ), choices );
   } else {
     g.dir = choices[ Math.floor( Math.random() * choices.length ) ];
