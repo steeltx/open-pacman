@@ -1,6 +1,6 @@
 # SPEC 01 — Cuatro fantasmas con personalidades clásicas
 
-> **Status:** Approved
+> **Status:** Implemented
 > **Depends on:** Ninguna
 > **Date:** 2026-10-05
 > **Objective:** Incorporar cuatro fantasmas con comportamientos clásicos diferenciados y un perseguidor agresivo que busque la ruta más corta hacia Pac-Man.
