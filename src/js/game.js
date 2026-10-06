@@ -204,6 +204,20 @@ function closestGhostDirection( grid, ghost, target, choices ) {
   return best;
 }
 
+function farthestGhostDirection( grid, ghost, target, choices ) {
+  let best = choices[ 0 ];
+  let bestDistance = -Infinity;
+  for ( const dir of choices ) {
+    const neighbor = ghostNeighbor( grid, ghost.x, ghost.y, dir );
+    const distance = ( neighbor.x - target.x ) ** 2 + ( neighbor.y - target.y ) ** 2;
+    if ( distance > bestDistance ) {
+      bestDistance = distance;
+      best = dir;
+    }
+  }
+  return best;
+}
+
 function decideGhost( game, g ) {
   const grid = game.grid;
 
@@ -216,7 +230,9 @@ function decideGhost( game, g ) {
   const choices = options.length ? options : legal;
   if ( !choices.length ) return;
 
-  if ( g.kind === 'blinky' ) {
+  if ( game.powerFramesRemaining > 0 ) {
+    g.dir = farthestGhostDirection( grid, g, pacmanAhead( game.pacman, 0 ), choices );
+  } else if ( g.kind === 'blinky' ) {
     const target = ghostTarget( game, g );
     g.dir = shortestGhostDirection( grid, g, target, choices )
       || closestGhostDirection( grid, g, target, choices );

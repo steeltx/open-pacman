@@ -161,6 +161,15 @@ const GHOST_COLORS = {
   clyde: '#ffb852',
 };
 
+function ghostColor( game, ghost ) {
+  if ( game.powerFramesRemaining > 0 && !ghost.returning ) {
+    const warning = game.powerFramesRemaining <= 120;
+    const white = Math.floor( game.powerFramesRemaining / 15 ) % 2 === 0;
+    return warning && white ? '#fff' : '#2121ff';
+  }
+  return GHOST_COLORS[ ghost.kind ] || '#ff0000';
+}
+
 function draw( ctx, game, frame ) {
   const grid = game.grid;
   const W = grid[ 0 ].length;
@@ -173,7 +182,7 @@ function draw( ctx, game, frame ) {
   drawDoor( ctx, grid );
   drawDots( ctx, grid, frame );
   drawPacman( ctx, game.pacman, frame );
-  game.ghosts.forEach( ( g ) => drawGhost( ctx, g, GHOST_COLORS[ g.kind ] || '#ff0000' ) );
+  game.ghosts.forEach( ( g ) => drawGhost( ctx, g, ghostColor( game, g ) ) );
   drawHUD( ctx, game, W );
 }
 
