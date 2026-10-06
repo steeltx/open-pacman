@@ -1,6 +1,6 @@
 # SPEC 03 — Power pellets y fantasmas comestibles
 
-> **Status:** Approved
+> **Status:** Implemented
 > **Depends on:** SPEC 01, SPEC 02
 > **Date:** 2026-10-05
 > **Objective:** Añadir cuatro power pellets que permitan a Pac-Man comer fantasmas temporalmente y enviarlos de regreso a su casa.
@@ -123,6 +123,16 @@ Cada paso debe dejar el juego ejecutable y verificable. Si un paso resulta demas
 - [ ] Giros pendientes, bloqueo de la puerta para Pac-Man, túnel y overlays de victoria/derrota siguen funcionando.
 - [ ] Abrir `src/index.html` y jugar manualmente no genera errores en la consola.
 - [ ] Las comprobaciones controladas y manuales se documentan sin presentar pruebas pendientes como realizadas.
+
+## Registro de verificación
+
+- Comprobaciones controladas ejecutadas con Node.js y `vm`, cargando los scripts clásicos con un objeto `window` simulado.
+- Paso 1: geometría, cuatro posiciones, consumo único, puntuación de pellets y puntos, plantilla intacta, reinicio, victoria incluyendo pellets y llamadas de dibujo con radio de 6 px y parpadeo.
+- Paso 2: estado inicial, capturas simultáneas, primera y última actualización protegida de las 360, cadena y máximo de puntuación, exclusión de fantasmas en regreso, renovación, pérdida de vida, derrota, reinicio y dibujo solo de ojos.
+- Paso 3: rutas mínimas legales para los cuatro fantasmas, paso por la puerta, llegada a la posición propia, salida sin espera, conexión del túnel, inversión, regreso sin daño y revival comestible. Se corrigieron dos supuestos de las comprobaciones: el destino propio no exige cruzar el túnel desde su borde y un punto bajo Pac-Man suma diez puntos durante una comprobación de colisión.
+- Paso 4: huida por distancia y desempate, velocidad sin cambios, decisiones alineadas, espera y salida durante el poder, recuperación de personalidad y color, alternancia azul/blanco, prioridad del regreso y renderizado sin mutación del estado.
+- `git diff --check` no detectó errores de espacios en los cuatro pasos.
+- Pendiente: abrir `src/index.html` y verificar visualmente el juego, Start/reinicio, giros pendientes, bloqueo de puerta para Pac-Man, túnel, pérdida de vidas, overlays y ausencia de errores en la consola. No se ha ejecutado ni automatizado una comprobación en navegador; los criterios de aceptación permanecen sin marcar hasta su revisión final.
 
 ## Decisiones
 
