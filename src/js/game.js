@@ -122,26 +122,65 @@ function movePacman( game ) {
   wrapTunnel( p, width );
 }
 
+function ghostNeighbor( grid, x, y, dir ) {
+  const delta = DIRS[ dir ];
+  const neighbor = { x: x + delta.x, y: y + delta.y };
+  wrapTunnel( neighbor, grid[ 0 ].length );
+  return neighbor;
+}
+
+function shortestGhostDirection( grid, ghost, target, choices ) {
+  const visited = new Set( [ `${ghost.x},${ghost.y}` ] );
+  const queue = [];
+  for ( const dir of choices ) {
+    const neighbor = ghostNeighbor( grid, ghost.x, ghost.y, dir );
+    const key = `${neighbor.x},${neighbor.y}`;
+    if ( visited.has( key ) ) continue;
+    visited.add( key );
+    queue.push( { ...neighbor, dir } );
+  }
+
+  for ( let index = 0; index < queue.length; index++ ) {
+    const cell = queue[ index ];
+    if ( cell.x === target.x && cell.y === target.y ) return cell.dir;
+    for ( const dir of Object.keys( DIRS ) ) {
+      if ( !canMove( grid, cell.x, cell.y, dir, 'ghost' ) ) continue;
+      const neighbor = ghostNeighbor( grid, cell.x, cell.y, dir );
+      const key = `${neighbor.x},${neighbor.y}`;
+      if ( visited.has( key ) ) continue;
+      visited.add( key );
+      queue.push( { ...neighbor, dir: cell.dir } );
+    }
+  }
+  return null;
+}
+
 function decideGhost( game, g ) {
   const grid = game.grid;
   const p = game.pacman;
 
-  const options = Object.keys( DIRS ).filter(
-    ( dir ) => dir !== OPPOSITE[ g.dir ] && canMove( grid, g.x, g.y, dir, 'ghost' )
+  // El orden left, right, up, down resuelve empates de forma reproducible.
+  const legal = Object.keys( DIRS ).filter(
+    ( dir ) => canMove( grid, g.x, g.y, dir, 'ghost' )
   );
+  const options = legal.filter( ( dir ) => dir !== OPPOSITE[ g.dir ] );
   // Sin salida (callejon): permitir el giro de 180.
-  const choices = options.length ? options : [ '' + OPPOSITE[ g.dir ] ];
+  const choices = options.length ? options : legal;
+  if ( !choices.length ) return;
 
   if ( g.kind === 'blinky' ) {
     const px = Math.round( p.x );
     const py = Math.round( p.y );
+    const shortest = shortestGhostDirection( grid, g, { x: px, y: py }, choices );
+    if ( shortest ) {
+      g.dir = shortest;
+      return;
+    }
     let best = choices[ 0 ];
     let bestDist = Infinity;
     for ( const dir of choices ) {
-      const d = DIRS[ dir ];
-      const nx = g.x + d.x;
-      const ny = g.y + d.y;
-      const dist = Math.abs( nx - px ) + Math.abs( ny - py );
+      const neighbor = ghostNeighbor( grid, g.x, g.y, dir );
+      const dist = ( neighbor.x - px ) ** 2 + ( neighbor.y - py ) ** 2;
       if ( dist < bestDist ) {
         bestDist = dist;
         best = dir;
